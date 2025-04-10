@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Card Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+        
+        .game-container {
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            aspect-ratio: 3/4;
+            perspective: 1000px;
+            cursor: pointer;
+        }
+        
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
+        
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        
+        .card-front, .card-back {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            backface-visibility: hidden;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-front {
+            background-color: #3498db;
+            transform: rotateY(180deg);
+            font-size: 28px;
+            color: white;
+        }
+        
+        .card-back {
+            background-color: #fff;
+            border: 2px solid #3498db;
+        }
+        
+        .card-back::after {
+            content: "?";
+            font-size: 28px;
+            color: #3498db;
+            font-weight: bold;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .modal h2 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .modal p {
+            margin-bottom: 20px;
+            color: #7f8c8d;
+        }
+        
+        @media (max-width: 500px) {
+            .game-board {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>Memory Card Game</h1>
+        </div>
+        
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="moves">0</div>
+                <div class="stat-label">Moves</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="pairs">0/8</div>
+                <div class="stat-label">Pairs</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="timer">0</div>
+                <div class="stat-label">Seconds</div>
+            </div>
+        </div>
+        
+        <div class="game-board" id="game-board"></div>
+        
+        <button id="restart-btn">Restart Game</button>
+    </div>
+    
+    <div class="modal" id="win-modal">
+        <div class="modal-content">
+            <h2>Congratulations!</h2>
+            <p id="result-text">You completed the game in <span id="final-moves">0</span> moves and <span id="final-time">0</span> seconds!</p>
+            <button id="play-again-btn">Play Again</button>
+        </div>
+    </div>
+    
+    <script>
+        // Card symbols (emojis)
+        const symbols = ['🚀', '🌟', '🎮', '🎯', '🏆', '🎨', '🎭', '🎲'];
+        
+        // Game state
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let moves = 0;
+        let timer = 0;
+        let timerInterval;
+        let isTimerRunning = false;
+        let canFlip = true;
+        
+        // DOM Elements
+        const gameBoard = document.getElementById('game-board');
+        const movesElement = document.getElementById('moves');
+        const pairsElement = document.getElementById('pairs');
+        const timerElement = document.getElementById('timer');
+        const restartBtn = document.getElementById('restart-btn');
+        const winModal = document.getElementById('win-modal');
+        const finalMovesElement = document.getElementById('final-moves');
+        const finalTimeElement = document.getElementById('final-time');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        
+        // Initialize game
+        function initGame() {
+            // Reset game state
+            cards = [];
+            flippedCards = [];
+            matchedPairs = 0;
+            moves = 0;
+            timer = 0;
+            isTimerRunning = false;
+            canFlip = true;
+            
+            // Clear timer
+            clearInterval(timerInterval);
+            
+            // Update UI
+            movesElement.textContent = moves;
+            pairsElement.textContent = `0/8`;
+            timerElement.textContent = timer;
+            
+            // Clear game board
+            gameBoard.innerHTML = '';
+            
+            // Create card deck (pairs of symbols)
+            const cardDeck = [...symbols, ...symbols];
+            
+            // Shuffle cards
+            shuffleArray(cardDeck);
+            
+            // Create card elements
+            cardDeck.forEach((symbol, index) => {
+                const card = createCard(symbol, index);
+                gameBoard.appendChild(card);
+                cards.push(card);
+            });
+        }
+        
+        // Create a card element
+        function createCard(symbol, index) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.dataset.index = index;
+            card.dataset.symbol = symbol;
+            
+            card.innerHTML = `
+                <div class="card-inner">
+                    <div class="card-front">${symbol}</div>
+                    <div class="card-back"></div>
+                </div>
+            `;
+            
+            card.addEventListener('click', () => flipCard(card));
+            return card;
+        }
+        
+        // Flip a card
+        function flipCard(card) {
+            // Check if the card can be flipped
+            if (!canFlip || card.classList.contains('flipped') || card.classList.contains('matched')) {
+                return;
+            }
+            
+            // Start timer on first flip
+            if (!isTimerRunning) {
+                startTimer();
+            }
+            
+            // Flip the card
+            card.classList.add('flipped');
+            flippedCards.push(card);
+            
+            // Check for a match if two cards are flipped
+            if (flippedCards.length === 2) {
+                moves++;
+                movesElement.textContent = moves;
+                canFlip = false;
+                
+                const [card1, card2] = flippedCards;
+                
+                if (card1.dataset.symbol === card2.dataset.symbol) {
+                    // Cards match
+                    card1.classList.add('matched');
+                    card2.classList.add('matched');
+                    flippedCards = [];
+                    canFlip = true;
+                    matchedPairs++;
+                    pairsElement.textContent = `${matchedPairs}/8`;
+                    
+                    // Check for win
+                    if (matchedPairs === 8) {
+                        endGame();
+                    }
+                } else {
+                    // Cards do not match, flip them back
+                    setTimeout(() => {
+                        card1.classList.remove('flipped');
+                        card2.classList.remove('flipped');
+                        flippedCards = [];
+                        canFlip = true;
+                    }, 1000);
+                }
+            }
+        }
+        
+        // Start the timer
+        function startTimer() {
+            isTimerRunning = true;
+            timerInterval = setInterval(() => {
+                timer++;
+                timerElement.textContent = timer;
+            }, 1000);
+        }
+        
+        // End the game
+        function endGame() {
+            clearInterval(timerInterval);
+            finalMovesElement.textContent = moves;
+            finalTimeElement.textContent = timer;
+            
+            setTimeout(() => {
+                winModal.style.display = 'flex';
+            }, 500);
+        }
+        
+        // Restart the game
+        function restartGame() {
+            winModal.style.display = 'none';
+            initGame();
+        }
+        
+        // Utility function to shuffle an array
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+        
+        // Event listeners
+        restartBtn.addEventListener('click', restartGame);
+        playAgainBtn.addEventListener('click', restartGame);
+        
+        // Initialize the game on load
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
